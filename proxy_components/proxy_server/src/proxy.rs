@@ -281,6 +281,18 @@ pub unsafe fn run_proxy(
                 .help("Set engine role label")
                 .takes_value(true),
         )
+        .arg(
+            Arg::with_name("memory-limit-size")
+                .long("memory-limit-size")
+                .help("Used as the maximum memory we can consume, in bytes")
+                .takes_value(true),
+        )
+        .arg(
+            Arg::with_name("memory-limit-ratio")
+                .long("memory-limit-ratio")
+                .help("Used as the maximum memory we can consume, in percentage")
+                .takes_value(true),
+        )
         .get_matches_from(args);
 
     if matches.is_present("print-sample-config") {
