@@ -158,18 +158,20 @@ pub fn overwrite_config_with_cmd_args(
         proxy_config.engine_store.enable_unips = enabled == 1;
     }
 
-    let mut memory_limit_set = false;
-    if let Some(s) = matches.value_of("memory-limit-size") {
-        let result: Result<u64, _> = s.parse();
-        if let Ok(memory_limit_size) = result {
-            info!(
-                "overwrite memory_usage_limit by `memory-limit-size` to {}",
-                memory_limit_size
-            );
-            config.memory_usage_limit = Some(ReadableSize(memory_limit_size));
-            memory_limit_set = true;
-        } else {
-            info!("overwrite memory_usage_limit by `memory-limit-size` failed"; "memory_limit_size" => s);
+    let mut memory_limit_set = config.memory_usage_limit.is_some();
+    if !memory_limit_set {
+        if let Some(s) = matches.value_of("memory-limit-size") {
+            let result: Result<u64, _> = s.parse();
+            if let Ok(memory_limit_size) = result {
+                info!(
+                    "overwrite memory_usage_limit by `memory-limit-size` to {}",
+                    memory_limit_size
+                );
+                config.memory_usage_limit = Some(ReadableSize(memory_limit_size));
+                memory_limit_set = true;
+            } else {
+                info!("overwrite memory_usage_limit by `memory-limit-size` failed"; "memory_limit_size" => s);
+            }
         }
     }
 
@@ -179,7 +181,6 @@ pub fn overwrite_config_with_cmd_args(
             let result: Result<f64, _> = s.parse();
             if let Ok(memory_limit_ratio) = result {
                 if memory_limit_ratio <= 0.0 || memory_limit_ratio > 1.0 {
-                    println!("overwrite memory_usage_limit meets error ratio");
                     info!("overwrite memory_usage_limit meets error ratio"; "ratio" => memory_limit_ratio);
                 } else {
                     let limit = (total as f64 * memory_limit_ratio) as u64;
