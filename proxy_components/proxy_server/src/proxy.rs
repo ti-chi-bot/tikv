@@ -334,6 +334,7 @@ pub unsafe fn run_proxy(
     if matches.is_present("only-decryption") {
         crate::run::run_tikv_only_decryption(config, proxy_config, engine_store_server_helper);
     } else {
+        // Log is enabled here.
         crate::run::run_tikv_proxy(config, proxy_config, engine_store_server_helper);
     }
 }

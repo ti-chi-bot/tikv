@@ -394,11 +394,11 @@ fn test_memory_limit_overwrite() {
         let args = vec![
             "test_memory_limit_overwrite3",
             "--memory-limit-ratio",
-            "0.9",
+            "0.800000",
         ];
         let mut config = bootstrap(args);
         assert!(config.validate().is_ok());
-        let limit = (total as f64 * 0.9) as u64;
+        let limit = (total as f64 * 0.8) as u64;
         assert_eq!(config.memory_usage_limit, Some(ReadableSize(limit)));
     }
 
