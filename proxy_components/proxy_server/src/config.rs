@@ -267,10 +267,6 @@ pub struct ProxyConfig {
     #[online_config(skip)]
     pub enable_io_snoop: bool,
 
-    #[doc(hidden)]
-    #[online_config(skip)]
-    pub memory_usage_high_water: f64,
-
     #[online_config(submodule)]
     pub readpool: ReadPoolConfig,
 
@@ -417,7 +413,6 @@ pub fn address_proxy_config(config: &mut TikvConfig, proxy_config: &ProxyConfig)
     config.storage.reserve_space = proxy_config.storage.reserve_space;
 
     config.enable_io_snoop = proxy_config.enable_io_snoop;
-    config.memory_usage_high_water = proxy_config.memory_usage_high_water;
 
     config.server.addr = proxy_config.server.addr.clone();
     config.server.advertise_addr = proxy_config.server.advertise_addr.clone();
