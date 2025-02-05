@@ -241,7 +241,7 @@ pub async fn with_resource_limiter<F: Future>(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "failpoints"))]
 mod tests {
     use std::sync::mpsc::{channel, Sender};
 
