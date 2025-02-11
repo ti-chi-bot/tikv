@@ -32522,6 +32522,7 @@
           "steppedLine": false,
           "targets": [
             {
+<<<<<<< HEAD
               "exemplar": true,
               "expr": "sum(rate(raft_engine_write_duration_seconds_sum{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) / sum(rate(raft_engine_write_duration_seconds_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))",
               "interval": "",
@@ -32532,8 +32533,29 @@
             {
               "exemplar": true,
               "expr": "histogram_quantile(0.95, sum(rate(raft_engine_write_duration_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le))",
+=======
+              "datasource": "${DS_TEST-CLUSTER}",
+              "expr": "sum(rate(\n    tikv_snapshot_limit_transport_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",type!~\"send\"}\n    [$__rate_interval]\n)) by (instance, type) ",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}-{{type}}",
+              "metric": "",
+              "query": "sum(rate(\n    tikv_snapshot_limit_transport_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",type!~\"send\"}\n    [$__rate_interval]\n)) by (instance, type) ",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            },
+            {
+              "datasource": "${DS_TEST-CLUSTER}",
+              "expr": "sum(rate(\n    tikv_snapshot_limit_generate_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",type=~\"io\"}\n    [$__rate_interval]\n)) by (instance, type) ",
+              "format": "time_series",
+>>>>>>> bfef4448d4 (chore: simplify snapshot metrics (#18203))
               "hide": false,
               "interval": "",
+<<<<<<< HEAD
               "legendFormat": "95%",
               "refId": "B"
             },
@@ -32552,6 +32574,15 @@
               "interval": "",
               "legendFormat": "999%",
               "refId": "D"
+=======
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}-generate-{{type}}",
+              "metric": "",
+              "query": "sum(rate(\n    tikv_snapshot_limit_generate_bytes\n    {k8s_cluster=\"$k8s_cluster\",tidb_cluster=\"$tidb_cluster\",instance=~\"$instance\",type=~\"io\"}\n    [$__rate_interval]\n)) by (instance, type) ",
+              "refId": "",
+              "step": 10,
+              "target": ""
+>>>>>>> bfef4448d4 (chore: simplify snapshot metrics (#18203))
             }
           ],
           "thresholds": [],
