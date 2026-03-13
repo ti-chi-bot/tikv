@@ -24,6 +24,7 @@ pub mod utils;
 
 pub use checkpoint_manager::GetCheckpointResult;
 pub use endpoint::{
-    BackupStreamResolver, Endpoint, ObserveOp, RegionCheckpointOperation, RegionSet, Task,
+    BackupStreamResolver, Endpoint, FlushResult, ObserveOp, RegionCheckpointOperation, RegionSet,
+    Task,
 };
 pub use service::BackupStreamGrpcService;

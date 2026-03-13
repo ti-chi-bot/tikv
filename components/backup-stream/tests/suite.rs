@@ -596,9 +596,18 @@ impl Suite {
     }
 
     pub fn force_flush_files(&self, task: &str) {
-        // TODO: use the callback to make the test more stable.
-        self.run(|| Task::ForceFlush(task.to_owned()));
+        // The receiver is intentionally kept alive (by Rust's drop order) until
+        // after `sync()`, so the channel remains open while tasks are scheduled.
+        // Results are not read here; the flush is fire-and-forget.
+        let (tx, _rx) = tokio::sync::mpsc::channel(16);
+        self.run(|| Task::ForceFlush(TaskSelector::ByName(task.to_owned()), tx.clone()));
         self.sync();
+    }
+
+    pub fn for_each_log_backup_cli(&self, mut f: impl FnMut(u64, &LogBackupClient)) {
+        for (id, cli) in &self.log_backup_cli {
+            f(*id, cli);
+        }
     }
 
     pub fn run(&self, mut t: impl FnMut() -> Task) {

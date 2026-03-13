@@ -8,7 +8,7 @@ use tikv_util::{warn, worker::Scheduler};
 
 use crate::{
     checkpoint_manager::{GetCheckpointResult, RegionIdWithVersion},
-    endpoint::{RegionCheckpointOperation, RegionSet},
+    endpoint::{FlushResult as InternalFlushResult, RegionCheckpointOperation, RegionSet},
     try_send, Task,
 };
 
@@ -103,5 +103,36 @@ impl LogBackup for BackupStreamGrpcService {
             self.endpoint,
             Task::RegionCheckpointsOp(RegionCheckpointOperation::Subscribe(sink))
         );
+    }
+
+    fn flush_now(
+        &mut self,
+        ctx: RpcContext<'_>,
+        _req: FlushNowRequest,
+        sink: grpcio::UnarySink<FlushNowResponse>,
+    ) {
+        let (tx, mut rx) = tokio::sync::mpsc::channel::<InternalFlushResult>(16);
+        let t = Task::ForceFlush(crate::router::TaskSelector::All, tx);
+        try_send!(self.endpoint, t);
+        ctx.spawn(async move {
+            let mut results = Vec::new();
+            while let Some(flush_result) = rx.recv().await {
+                let mut r = FlushResult::new();
+                r.set_task_name(flush_result.task);
+                match flush_result.error {
+                    None => r.set_success(true),
+                    Some(err) => {
+                        r.set_success(false);
+                        r.set_error_message(err.to_string());
+                    }
+                }
+                results.push(r);
+            }
+            let mut resp = FlushNowResponse::new();
+            resp.set_results(results.into());
+            if let Err(e) = sink.success(resp).await {
+                warn!("failed to reply flush_now response"; "err" => %e);
+            }
+        });
     }
 }

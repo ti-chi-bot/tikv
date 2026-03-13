@@ -12,7 +12,7 @@ mod all {
         time::{Duration, Instant},
     };
 
-    use backup_stream::{GetCheckpointResult, RegionCheckpointOperation, RegionSet, Task};
+    use backup_stream::{GetCheckpointResult, RegionCheckpointOperation, RegionSet, Task, utils};
     use futures::{Stream, StreamExt};
     use kvproto::metapb::RegionEpoch;
     use pd_client::PdClient;
@@ -376,12 +376,16 @@ mod all {
         let leader = suite.cluster.leader_of_region(1).unwrap();
         suite.must_shuffle_leader(1);
         let round2 = run_async_test(suite.write_records(256, 128, 1));
+        let (force_flush_tx, _rx) = tokio::sync::mpsc::channel(16);
         suite
             .endpoints
             .get(&leader.store_id)
             .unwrap()
             .scheduler()
-            .schedule(Task::ForceFlush("r".to_owned()))
+            .schedule(Task::ForceFlush(
+                backup_stream::router::TaskSelector::ByName("r".to_owned()),
+                force_flush_tx,
+            ))
             .unwrap();
         suite.sync();
         std::thread::sleep(Duration::from_secs(2));
@@ -463,6 +467,128 @@ mod all {
             assert_eq!(e.initial_scan_semaphore.available_permits(), 16,);
             true
         });
+    }
+
+    #[test]
+    fn force_flush() {
+        let mut suite = SuiteBuilder::new_named("force_flush").nodes(1).build();
+        suite.must_register_task(1, "force_flush");
+        let recs = run_async_test(suite.write_records(0, 128, 1));
+        let mut strm = suite.flush_stream(true);
+        let tso = suite.tso();
+
+        suite.for_each_log_backup_cli(|_id, c| {
+            let res = c.flush_now(Default::default()).unwrap();
+            assert_eq!(res.results.len(), 1);
+            assert!(res.results[0].error_message.is_empty(), "{:?}", res);
+            assert!(res.results[0].success, "{:?}", res);
+        });
+
+        let Some((_, resp)) = run_async_test(strm.next()) else {
+            panic!("subscribe stream close early")
+        };
+        assert_eq!(resp.events.len(), 1, "{:?}", resp.events);
+        assert!(
+            resp.events[0].checkpoint > tso.into_inner(),
+            "{:?}, {}",
+            resp.events[0],
+            tso
+        );
+
+        suite.check_for_write_records(
+            suite.flushed_files.path(),
+            recs.iter().map(|v| v.as_slice()),
+        )
+    }
+
+    /// Verify the expected behavior:
+    /// 1) The flush fails when no success TSO allocation.
+    /// 2) After that, flush should always succeed, regardless of whether PD TSO
+    ///    allocation succeeds.
+    #[test]
+    fn monotonic_flush_ts_across_pd_failure() {
+        let mut suite = SuiteBuilder::new_named("monotonic_flush_ts")
+            .nodes(1)
+            .build();
+        suite.must_register_task(1, "monotonic_flush_ts");
+        suite.sync();
+
+        // Round 1: force the flush w/o any PD TSO allocation to fail.
+        let round1 = run_async_test(suite.write_records(0, 8, 1));
+        for _ in 0..3 {
+            suite.cluster.pd_client.trigger_tso_failure();
+            suite.for_each_log_backup_cli(|_id, c| {
+                let res = c.flush_now(Default::default()).unwrap();
+                assert_eq!(res.results.len(), 1, "{:?}", res.results);
+                assert!(!res.results[0].success, "{:?}", res);
+                assert!(
+                    res.results[0]
+                        .error_message
+                        .contains("failed to get TSO for flushing task"),
+                    "{:?}",
+                    res,
+                );
+            });
+            suite.wait_for_flush();
+            let meta_names_after_r1 = collect_meta_filenames(suite.flushed_files.path());
+            assert!(
+                meta_names_after_r1.is_empty(),
+                "the first failed flush should not generate any meta files"
+            );
+        }
+
+        // Round 2: flush succeeds when PD TSO allocation succeeds.
+        let round2 = run_async_test(suite.write_records(64, 8, 1));
+        suite.for_each_log_backup_cli(|_id, c| {
+            let res = c.flush_now(Default::default()).unwrap();
+            assert_eq!(res.results.len(), 1, "{:?}", res.results);
+            assert!(res.results[0].success, "{:?}", res);
+            assert!(res.results[0].error_message.is_empty(), "{:?}", res);
+        });
+        suite.wait_for_flush();
+        let meta_names_after_r2 = collect_meta_filenames(suite.flushed_files.path());
+        assert!(
+            !meta_names_after_r2.is_empty(),
+            "a successful flush should produce metadata files"
+        );
+
+        // Round 3: flush still succeeds even if PD TSO allocation fails again.
+        let round3 = run_async_test(suite.write_records(128, 8, 1));
+        suite.cluster.pd_client.trigger_tso_failure();
+        suite.for_each_log_backup_cli(|_id, c| {
+            let res = c.flush_now(Default::default()).unwrap();
+            assert_eq!(res.results.len(), 1, "{:?}", res.results);
+            assert!(res.results[0].success, "{:?}", res);
+            assert!(res.results[0].error_message.is_empty(), "{:?}", res);
+        });
+        suite.wait_for_flush();
+
+        let meta_names_after_r3 = collect_meta_filenames(suite.flushed_files.path());
+        assert!(
+            meta_names_after_r3.len() > meta_names_after_r2.len(),
+            "a successful flush after repeated TSO failures should produce more meta files"
+        );
+
+        // Verify flush_ts monotonicity across all meta files.
+        let flush_tss: Vec<u64> = meta_names_after_r3
+            .iter()
+            .map(|name| {
+                utils::parse_backupmeta_filename(name)
+                    .unwrap_or_else(|err| panic!("invalid backup meta file name {name}: {err}"))
+                    .flush_ts
+            })
+            .collect();
+        assert_eq!(flush_tss.len(), 2, "{:?}", flush_tss);
+        assert_eq!(flush_tss[0] + 1, flush_tss[1]);
+
+        // Verify all data from both rounds is present.
+        suite.check_for_write_records(
+            suite.flushed_files.path(),
+            round1
+                .union(&round2)
+                .chain(round3.iter())
+                .map(Vec::as_slice),
+        );
     }
 
     #[test]

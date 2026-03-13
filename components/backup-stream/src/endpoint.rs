@@ -2,7 +2,7 @@
 
 use std::{
     any::Any,
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     fmt,
     marker::PhantomData,
     sync::{Arc, Mutex},
@@ -64,7 +64,7 @@ use crate::{
     metadata::{store::MetaStore, MetadataClient, MetadataEvent, StreamTask},
     metrics::{self, TaskStatus},
     observer::BackupStreamObserver,
-    router::{self, ApplyEvents, FlushContext, Router, TaskSelector},
+    router::{self, ApplyEvents, FlushContext, Router, TaskSelector, TaskSelectorRef},
     subscription_manager::{RegionSubscriptionManager, ResolvedRegions},
     subscription_track::{Ref, RefMut, ResolveResult, SubscriptionTracer},
     try_send,
@@ -72,6 +72,14 @@ use crate::{
 };
 
 const SLOW_EVENT_THRESHOLD: f64 = 120.0;
+
+/// Result of a force-flush operation, communicated from the endpoint back to
+/// the gRPC service handler.
+pub struct FlushResult {
+    pub task: String,
+    pub error: Option<Box<Error>>,
+}
+
 /// CHECKPOINT_SAFEPOINT_TTL_IF_ERROR specifies the safe point TTL(24 hour) if
 /// task has fatal error.
 const CHECKPOINT_SAFEPOINT_TTL_IF_ERROR: u64 = 24;
@@ -104,6 +112,7 @@ pub struct Endpoint<S, R, E: KvEngine, PDC> {
     /// Each time we spawn a task, once time goes by, we abort that task.
     pub abort_last_storage_save: Option<AbortHandle>,
     pub initial_scan_semaphore: Arc<Semaphore>,
+    flush_done_subscribers: HashMap<String, Sender<FlushResult>>,
     last_flush_ts: u64,
 }
 
@@ -203,6 +212,7 @@ where
             config,
             checkpoint_mgr,
             abort_last_storage_save: None,
+            flush_done_subscribers: Default::default(),
             last_flush_ts: 0,
         };
         ep.pool.spawn(root!(ep.min_ts_worker()));
@@ -908,28 +918,70 @@ where
         }
     }
 
-    pub fn on_force_flush(&mut self, task: String) {
-        let handler_res = self.range_router.get_task_handler(&task);
-        // This should only happen in testing, it would be to unwrap...
-        let _ = handler_res.unwrap().set_flushing_status_cas(false, true);
+    fn subscribe_flush_done(&mut self, task: &str, mailbox: Sender<FlushResult>) {
+        if let Some(old_one) = self.flush_done_subscribers.insert(task.to_owned(), mailbox) {
+            let res = FlushResult {
+                task: task.to_owned(),
+                error: Some(Box::new(Error::Other(box_err!(
+                    "another waiter enters and this one was aborted: try again later"
+                )))),
+            };
+            let _ = old_one.try_send(res);
+        }
+    }
+
+    pub fn on_force_flush(&mut self, task: TaskSelectorRef<'_>, sender: Sender<FlushResult>) {
+        let hnd = self.pool.handle().clone();
+        info!("Triggering force flush."; "selector" => ?task);
+        let handlers: Vec<_> = self.range_router.select_task_handler(task).collect();
+
         let (mts, fts) = match self.prepare_min_ts_and_flush_ts() {
             Ok(v) => v,
             Err(err) => {
                 err.report("failed to get TSO for flushing, skipping this flush");
-                if let Ok(task_handler) = self.range_router.get_task_handler(&task) {
-                    task_handler.set_flushing_status(false);
+                let err_msg = err.to_string();
+                let mut results = Vec::with_capacity(handlers.len().max(1));
+                for handler in handlers {
+                    results.push(FlushResult {
+                        task: handler.task.info.name.to_owned(),
+                        error: Some(Box::new(Error::Other(box_err!(
+                            "failed to get TSO for flushing task {}: {}",
+                            handler.task.info.name,
+                            err_msg
+                        )))),
+                    });
                 }
+                hnd.spawn(async move {
+                    for result in results {
+                        if sender.send(result).await.is_err() {
+                            info!("force flush result receiver is gone while reporting TSO error");
+                            break;
+                        }
+                    }
+                });
                 return;
             }
         };
-        let sched = self.scheduler.clone();
-        let hnd = self.pool.handle().clone();
-        hnd.block_on(self.region_op(ObserveOp::ResolveRegions {
-            callback: Box::new(move |res| {
-                try_send!(sched, Task::ExecFlush(task, res, fts));
-            }),
-            min_ts: mts,
-        }));
+
+        for handler in handlers {
+            let sched = self.scheduler.clone();
+            let sender = sender.clone();
+            self.subscribe_flush_done(&handler.task.info.name, sender);
+            match handler.set_flushing_status_cas(false, true) {
+                Ok(_) => {
+                    let task_name = handler.task.info.name.to_owned();
+                    hnd.block_on(self.region_op(ObserveOp::ResolveRegions {
+                        callback: Box::new(move |res| {
+                            try_send!(sched, Task::ExecFlush(task_name, res, fts));
+                        }),
+                        min_ts: mts,
+                    }));
+                }
+                Err(_) => {
+                    info!("on_force_flush: a flush is on the way, waiting its finish..."; "task" => %handler.task.info.name);
+                }
+            }
+        }
     }
 
     pub fn on_flush(&mut self, task: String) {
@@ -965,13 +1017,20 @@ where
 
     fn on_exec_flush(&mut self, task: String, resolved: ResolvedRegions, flush_ts: TimeStamp) {
         self.checkpoint_mgr.freeze();
-        self.pool.spawn(
-            root!("flush"; self.do_flush(task, resolved, flush_ts).map(|r| {
-                if let Err(err) = r {
-                    err.report("during updating flush status")
-                }
-            })),
-        );
+        let subscriber = self.flush_done_subscribers.remove(&task);
+        let fut = self.do_flush(task.clone(), resolved, flush_ts);
+        self.pool.spawn(root!("flush"; async move {
+            let result = fut.await;
+            if let Some(sub) = subscriber {
+                let flush_result = FlushResult {
+                    task,
+                    error: result.err().map(Box::new),
+                };
+                let _ = sub.send(flush_result).await;
+            } else if let Err(err) = result {
+                err.report("during updating flush status")
+            }
+        }));
     }
 
     fn update_global_checkpoint(&self, task: String) -> future![()] {
@@ -1099,7 +1158,7 @@ where
             Task::BatchEvent(events) => self.do_backup(events),
             Task::Flush(task) => self.on_flush(task),
             Task::ModifyObserve(op) => self.on_modify_observe(op),
-            Task::ForceFlush(task) => self.on_force_flush(task),
+            Task::ForceFlush(selector, sender) => self.on_force_flush(selector.reference(), sender),
             Task::FatalError(task, err) => self.on_fatal_error(task, err),
             Task::ChangeConfig(cfg) => {
                 self.on_update_change_config(cfg);
@@ -1327,7 +1386,7 @@ pub enum Task {
     /// Change the observe status of some region.
     ModifyObserve(ObserveOp),
     /// Convert status of some task into `flushing` and do flush then.
-    ForceFlush(String),
+    ForceFlush(TaskSelector, Sender<FlushResult>),
     /// FatalError pauses the task and set the error.
     FatalError(TaskSelector, Box<Error>),
     /// Run the callback when see this message. Only for test usage.
@@ -1456,7 +1515,7 @@ impl fmt::Debug for Task {
             Self::ChangeConfig(arg0) => f.debug_tuple("ChangeConfig").field(arg0).finish(),
             Self::Flush(arg0) => f.debug_tuple("Flush").field(arg0).finish(),
             Self::ModifyObserve(op) => f.debug_tuple("ModifyObserve").field(op).finish(),
-            Self::ForceFlush(arg0) => f.debug_tuple("ForceFlush").field(arg0).finish(),
+            Self::ForceFlush(arg0, _) => f.debug_tuple("ForceFlush").field(arg0).finish(),
             Self::FatalError(task, err) => {
                 f.debug_tuple("FatalError").field(task).field(err).finish()
             }

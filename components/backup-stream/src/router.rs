@@ -638,6 +638,24 @@ impl RouterInner {
             .collect()
     }
 
+    pub fn select_task_handler(
+        &self,
+        selector: TaskSelectorRef<'_>,
+    ) -> impl Iterator<Item = Arc<StreamTaskHandler>> + '_ {
+        self.tasks
+            .iter()
+            .filter(move |entry| {
+                let (name, info) = entry.pair();
+                selector.matches(
+                    name.as_str(),
+                    info.ranges
+                        .iter()
+                        .map(|(s, e)| (s.as_slice(), e.as_slice())),
+                )
+            })
+            .map(|entry| entry.value().clone())
+    }
+
     #[cfg(test)]
     pub(crate) fn must_mut_task_info<F>(&self, task_name: &str, mutator: F)
     where
