@@ -104,19 +104,7 @@ pub struct Endpoint<S, R, E: KvEngine, PDC> {
     /// Each time we spawn a task, once time goes by, we abort that task.
     pub abort_last_storage_save: Option<AbortHandle>,
     pub initial_scan_semaphore: Arc<Semaphore>,
-<<<<<<< HEAD
-=======
-    flush_done_subscribers: HashMap<String, Sender<FlushResult>>,
-    /// Tracks the last issued `flush_ts` to guarantee monotonicity across
     last_flush_ts: u64,
-}
-
-impl<S, R, E: KvEngine, PDC> Drop for Endpoint<S, R, E, PDC> {
-    fn drop(&mut self) {
-        // SAFETY: won't access thread pool after dropping.
-        unsafe { ManuallyDrop::take(&mut self.pool).shutdown_background() }
-    }
->>>>>>> d3d70c07bf (backup-stream: ensure monotonically increasing flush_ts per store (#19407))
 }
 
 impl<S, R, E, PDC> Endpoint<S, R, E, PDC>
@@ -215,11 +203,7 @@ where
             config,
             checkpoint_mgr,
             abort_last_storage_save: None,
-<<<<<<< HEAD
-=======
-            flush_done_subscribers: Default::default(),
             last_flush_ts: 0,
->>>>>>> d3d70c07bf (backup-stream: ensure monotonically increasing flush_ts per store (#19407))
         };
         ep.pool.spawn(root!(ep.min_ts_worker()));
         ep
@@ -924,88 +908,28 @@ where
         }
     }
 
-<<<<<<< HEAD
-    pub fn on_force_flush(&self, task: String) {
-        self.pool.block_on(async move {
-            let handler_res = self.range_router.get_task_handler(&task);
-            // This should only happen in testing, it would be to unwrap...
-            let _ = handler_res.unwrap().set_flushing_status_cas(false, true);
-            let (mts, fts) = self.prepare_min_ts().await;
-            let sched = self.scheduler.clone();
-            self.region_op(ObserveOp::ResolveRegions {
-                callback: Box::new(move |res| {
-                    try_send!(sched, Task::ExecFlush(task, res, fts));
-                }),
-                min_ts: mts,
-            })
-            .await;
-        });
-=======
-    fn subscribe_flush_done(&mut self, task: &str, mailbox: Sender<FlushResult>) {
-        if let Some(old_one) = self.flush_done_subscribers.insert(task.to_owned(), mailbox) {
-            let res = FlushResult {
-                task: task.to_owned(),
-                error: Some(Box::new(Error::Other(box_err!(
-                    "another waiter enters and this one was aborted: try again later"
-                )))),
-            };
-            let _ = old_one.try_send(res);
-        }
-    }
-
-    pub fn on_force_flush(&mut self, task: TaskSelectorRef<'_>, sender: Sender<FlushResult>) {
-        let hnd = self.pool.handle().clone();
-        info!("Triggering force flush."; "selector" => ?task);
-        let handlers: Vec<_> = self.range_router.select_task_handler(task).collect();
-
+    pub fn on_force_flush(&mut self, task: String) {
+        let handler_res = self.range_router.get_task_handler(&task);
+        // This should only happen in testing, it would be to unwrap...
+        let _ = handler_res.unwrap().set_flushing_status_cas(false, true);
         let (mts, fts) = match self.prepare_min_ts_and_flush_ts() {
             Ok(v) => v,
             Err(err) => {
                 err.report("failed to get TSO for flushing, skipping this flush");
-                let err_msg = err.to_string();
-                let mut results = Vec::with_capacity(handlers.len().max(1));
-                for handler in handlers {
-                    results.push(FlushResult {
-                        task: handler.task.info.name.to_owned(),
-                        error: Some(Box::new(Error::Other(box_err!(
-                            "failed to get TSO for flushing task {}: {}",
-                            handler.task.info.name,
-                            err_msg
-                        )))),
-                    });
+                if let Ok(task_handler) = self.range_router.get_task_handler(&task) {
+                    task_handler.set_flushing_status(false);
                 }
-                hnd.spawn(async move {
-                    for result in results {
-                        if sender.send(result).await.is_err() {
-                            info!("force flush result receiver is gone while reporting TSO error");
-                            break;
-                        }
-                    }
-                });
                 return;
             }
         };
-
-        for handler in handlers {
-            let sched = self.scheduler.clone();
-            let sender = sender.clone();
-            self.subscribe_flush_done(&handler.task.info.name, sender);
-            match handler.set_flushing_status_cas(false, true) {
-                Ok(_) => {
-                    let task_name = handler.task.info.name.to_owned();
-                    hnd.block_on(self.region_op(ObserveOp::ResolveRegions {
-                        callback: Box::new(move |res| {
-                            try_send!(sched, Task::ExecFlush(task_name, res, fts));
-                        }),
-                        min_ts: mts,
-                    }));
-                }
-                Err(_) => {
-                    info!("on_force_flush: a flush is on the way, waiting its finish..."; "task" => %handler.task.info.name);
-                }
-            }
-        }
->>>>>>> d3d70c07bf (backup-stream: ensure monotonically increasing flush_ts per store (#19407))
+        let sched = self.scheduler.clone();
+        let hnd = self.pool.handle().clone();
+        hnd.block_on(self.region_op(ObserveOp::ResolveRegions {
+            callback: Box::new(move |res| {
+                try_send!(sched, Task::ExecFlush(task, res, fts));
+            }),
+            min_ts: mts,
+        }));
     }
 
     pub fn on_flush(&mut self, task: String) {
