@@ -177,7 +177,7 @@ impl File {
     }
 
     pub fn try_lock_shared(&self) -> io::Result<()> {
-        fs2::FileExt::try_lock_shared(&self.inner)
+        fs2::FileExt::try_lock_shared(&self.inner).map(|_| ())
     }
 
     pub fn try_lock_exclusive(&self) -> io::Result<()> {

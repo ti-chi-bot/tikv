@@ -344,16 +344,18 @@ test_with_nextest:
 ## Static analysis
 ## ---------------
 
+FMT_TOOLCHAIN ?= nightly-2023-12-28
+
 unset-override:
 	@# unset first in case of any previous overrides
 	@if rustup override list | grep `pwd` > /dev/null; then rustup override unset; fi
 
 pre-format: unset-override
-	@rustup component add rustfmt
-	@which cargo-sort &> /dev/null || cargo +nightly install -q cargo-sort@1.0.9
+	@rustup component add rustfmt --toolchain ${FMT_TOOLCHAIN}
+	@which cargo-sort &> /dev/null || cargo +${FMT_TOOLCHAIN} install -q cargo-sort@1.0.9
 
 format: pre-format
-	@cargo fmt
+	@cargo +${FMT_TOOLCHAIN} fmt
 	@cargo sort -w -c &>/dev/null || cargo sort -w >/dev/null
 
 doc:

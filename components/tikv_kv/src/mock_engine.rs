@@ -176,9 +176,9 @@ impl Engine for MockEngine {
     }
 
     type IMSnap = Self::Snap;
-    type IMSnapshotRes = Self::SnapshotRes;
+    type IMSnapshotRes = <RocksEngine as Engine>::IMSnapshotRes;
     fn async_in_memory_snapshot(&mut self, ctx: SnapContext<'_>) -> Self::IMSnapshotRes {
-        self.async_snapshot(ctx)
+        self.base.async_in_memory_snapshot(ctx)
     }
 
     type WriteRes = <RocksEngine as Engine>::WriteRes;
