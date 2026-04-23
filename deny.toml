@@ -107,6 +107,9 @@ ignore = [
     # in master branch. Because the modification is too large,
     # we decided on the release branch to ignore it.
     "RUSTSEC-2026-0009",
+    # azure/http-types still pull rand 0.7.x on release-8.5. Upgrading this
+    # dependency chain on the release branch is too invasive for this fix.
+    "RUSTSEC-2026-0097",
 ]
 
 # TiKV is licensed under Apache 2.0, according to ASF 3RD PARTY LICENSE POLICY,

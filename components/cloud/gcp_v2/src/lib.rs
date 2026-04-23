@@ -11,7 +11,7 @@ use cloud::{
     metrics,
 };
 use futures::{future::LocalBoxFuture, stream::Stream};
-use futures_util::{TryStreamExt, io::AsyncReadExt as _, stream::StreamExt};
+use futures_util::{io::AsyncReadExt as _, stream::StreamExt, TryStreamExt};
 use google_cloud_storage::{
     client::{Storage, StorageControl},
     model_ext::ReadRange,
@@ -26,7 +26,7 @@ use url::Url;
 mod credentials;
 mod kms;
 use credentials::{
-    CredentialsMode, build_credentials, ensure_rustls_fips_provider, validate_credentials_json,
+    build_credentials, ensure_rustls_fips_provider, validate_credentials_json, CredentialsMode,
 };
 pub use kms::GcpKms;
 

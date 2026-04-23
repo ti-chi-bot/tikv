@@ -1,21 +1,20 @@
 // Copyright 2026 TiKV Project Authors. Licensed under Apache-2.0.
 
 use cloud::{
-    STORAGE_VENDOR_NAME_GCP_V2,
     error::{Error as CloudError, KmsError, Result},
     kms::{Config, CryptographyType, DataKeyPair, EncryptedKey, KmsProvider, PlainKey},
-    metrics,
+    metrics, STORAGE_VENDOR_NAME_GCP_V2,
 };
 use google_cloud_gax::{
     client_builder::Error as GaxBuildError,
-    error::{Error as GaxError, rpc::Code as RpcCode},
+    error::{rpc::Code as RpcCode, Error as GaxError},
 };
 use google_cloud_kms_v1::{client::KeyManagementService, model::ProtectionLevel};
 use tikv_util::{box_err, stream::RetryError, time::Instant};
 use tokio::sync::OnceCell;
 
 use crate::credentials::{
-    CredentialsMode, build_credentials, ensure_rustls_fips_provider, validate_credentials_json,
+    build_credentials, ensure_rustls_fips_provider, validate_credentials_json, CredentialsMode,
 };
 
 const DEFAULT_DATAKEY_SIZE: usize = 32;
@@ -337,7 +336,7 @@ mod tests {
     use std::future::{self, Future};
 
     use google_cloud_gax::{
-        error::{Error as GaxError, rpc::Status},
+        error::{rpc::Status, Error as GaxError},
         options::RequestOptions,
         response::Response,
     };

@@ -22,8 +22,8 @@ use engine_traits::{
     CF_WRITE,
 };
 use external_storage::{
-    BackendConfig, ExternalStorage, RestoreConfig, compression_reader_dispatcher,
-    encrypt_wrap_reader, wrap_with_checksum_reader_if_needed,
+    compression_reader_dispatcher, encrypt_wrap_reader, wrap_with_checksum_reader_if_needed,
+    BackendConfig, ExternalStorage, RestoreConfig,
 };
 use file_system::{get_io_rate_limiter, IoType, OpenOptions};
 use kvproto::{
@@ -49,7 +49,6 @@ use tokio::{runtime::Runtime, sync::OnceCell};
 use txn_types::{Key, TimeStamp, WriteRef};
 
 use crate::{
-    Config, ConfigManager as ImportConfigManager, Error, Result,
     caching::{
         cache_map::{CacheMap, ShareOwned},
         storage_cache::StorageBackendFactory,
@@ -60,7 +59,7 @@ use crate::{
     metrics::*,
     sst_merge_iter::BinaryIterator,
     sst_writer::{RawSstWriter, TxnSstWriter},
-    util,
+    util, Config, ConfigManager as ImportConfigManager, Error, Result,
 };
 
 pub struct LoadedFile {
@@ -929,10 +928,12 @@ impl<E: KvEngine> SstImporter<E> {
         ext_storage: Arc<dyn ExternalStorage>,
     ) -> Arc<dyn ExternalStorage> {
         if let Some(key_manager) = self.key_manager.clone() {
-            Arc::new(external_storage::AutoEncryptLocalRestoredFileExternalStorage {
-                key_manager,
-                storage: ext_storage,
-            }) as Arc<dyn ExternalStorage>
+            Arc::new(
+                external_storage::AutoEncryptLocalRestoredFileExternalStorage {
+                    key_manager,
+                    storage: ext_storage,
+                },
+            ) as Arc<dyn ExternalStorage>
         } else {
             ext_storage
         }
@@ -3059,10 +3060,9 @@ mod tests {
             false,
         )
         .unwrap();
-        let ext_storage =
-            importer.auto_encrypt_local_file_if_needed(
-                importer.external_storage_or_cache(&backend, "").unwrap(),
-            );
+        let ext_storage = importer.auto_encrypt_local_file_if_needed(
+            importer.external_storage_or_cache(&backend, "").unwrap(),
+        );
 
         // test read all of the file.
         let restore_config = RestoreConfig {

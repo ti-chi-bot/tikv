@@ -3,8 +3,8 @@
 use std::io::{Read, Write};
 
 use azure::STORAGE_VENDOR_NAME_AZURE;
-use cloud::STORAGE_VENDOR_NAME_GCP;
 pub use cloud::kms::Config as CloudConfig;
+use cloud::STORAGE_VENDOR_NAME_GCP;
 use encryption::{GcpConfig, KmsBackend};
 use encryption_export::{create_cloud_backend, AzureConfig, Backend, Error, KmsConfig, Result};
 use file_system::{File, OpenOptions};
