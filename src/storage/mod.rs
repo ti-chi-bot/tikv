@@ -3576,8 +3576,7 @@ impl<E: Engine> Engine for TxnTestEngine<E> {
     type IMSnap = Self::Snap;
     type IMSnapshotRes = impl Future<Output = tikv_kv::Result<Self::IMSnap>> + Send;
     fn async_in_memory_snapshot(&mut self, ctx: SnapContext<'_>) -> Self::IMSnapshotRes {
-        let fut = self.async_snapshot(ctx);
-        async move { fut.await }
+        self.async_snapshot(ctx)
     }
 
     type WriteRes = E::WriteRes;

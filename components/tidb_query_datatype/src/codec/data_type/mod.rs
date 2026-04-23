@@ -711,7 +711,7 @@ impl<'a> EvaluableRef<'a> for SetRef<'a> {
         }
     }
     #[inline]
-    fn borrow_vector_value(v: &'a VectorValue) -> &ChunkedVecSet {
+    fn borrow_vector_value(v: &'a VectorValue) -> &'a ChunkedVecSet {
         match v {
             VectorValue::Set(x) => x,
             other => panic!(

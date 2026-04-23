@@ -1,6 +1,6 @@
 // Copyright 2017 TiKV Project Authors. Licensed under Apache-2.0.
 
-use std::{collections::BTreeMap, f64, fmt, str, str::FromStr, string::ToString};
+use std::{collections::BTreeMap, f64, fmt, str, str::FromStr};
 
 use serde::{
     de::{self, Deserialize, Deserializer, MapAccess, SeqAccess, Visitor},
@@ -57,21 +57,22 @@ impl MySqlFormatter {
     }
 }
 
-impl<'a> ToString for JsonRef<'a> {
+impl fmt::Display for JsonRef<'_> {
     /// This function is a simple combination and rewrite of serde_json's
     /// `to_writer_pretty`
-    fn to_string(&self) -> String {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut writer = Vec::with_capacity(128);
         let mut ser = JsonSerializer::with_formatter(&mut writer, MySqlFormatter::new());
         self.serialize(&mut ser).unwrap();
-        unsafe {
+        let output = unsafe {
             // serde_json will not emit invalid UTF-8
             String::from_utf8_unchecked(writer)
-        }
+        };
+        f.write_str(&output)
     }
 }
 
-impl<'a> Serialize for JsonRef<'a> {
+impl Serialize for JsonRef<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,

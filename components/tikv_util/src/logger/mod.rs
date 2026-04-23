@@ -31,7 +31,7 @@ const SLOG_CHANNEL_SIZE: usize = 10240;
 const SLOG_CHANNEL_OVERFLOW_STRATEGY: OverflowStrategy = OverflowStrategy::Drop;
 const TIMESTAMP_FORMAT: &str = "%Y/%m/%d %H:%M:%S%.3f %:z";
 
-static LOG_LEVEL: AtomicUsize = AtomicUsize::new(usize::max_value());
+static LOG_LEVEL: AtomicUsize = AtomicUsize::new(usize::MAX);
 
 pub fn init_log<D>(
     drain: D,
@@ -673,11 +673,7 @@ impl<'a> Serializer<'a> {
     fn finish(self) {}
 }
 
-impl<'a> Drop for Serializer<'a> {
-    fn drop(&mut self) {}
-}
-
-impl<'a> slog::Serializer for Serializer<'a> {
+impl slog::Serializer for Serializer<'_> {
     fn emit_none(&mut self, key: Key) -> slog::Result {
         self.emit_arguments(key, &format_args!("None"))
     }

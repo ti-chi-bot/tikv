@@ -236,7 +236,7 @@ async fn scan_executor_loop(init: impl InitialScan, mut cmds: Receiver<ScanCmd>)
 /// spawn the executors to some runtime.
 #[cfg(test)]
 fn spawn_executors_to(
-    init: impl InitialScan + Send + Sync + 'static,
+    init: impl InitialScan + 'static,
     handle: &tokio::runtime::Handle,
 ) -> ScanPoolHandle {
     let (tx, rx) = tokio::sync::mpsc::channel(MESSAGE_BUFFER_SIZE);
@@ -247,10 +247,7 @@ fn spawn_executors_to(
 }
 
 /// spawn the executors in the scan pool.
-fn spawn_executors(
-    init: impl InitialScan + Send + Sync + 'static,
-    number: usize,
-) -> ScanPoolHandle {
+fn spawn_executors(init: impl InitialScan + 'static, number: usize) -> ScanPoolHandle {
     let (tx, rx) = tokio::sync::mpsc::channel(MESSAGE_BUFFER_SIZE);
     let pool = create_scan_pool(number);
     let handle = pool.handle().clone();

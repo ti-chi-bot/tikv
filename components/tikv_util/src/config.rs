@@ -237,7 +237,7 @@ impl<'de> Deserialize<'de> for ReadableSize {
     {
         struct SizeVisitor;
 
-        impl<'de> Visitor<'de> for SizeVisitor {
+        impl Visitor<'_> for SizeVisitor {
             type Value = ReadableSize;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -516,7 +516,7 @@ impl<'de> Deserialize<'de> for ReadableDuration {
     {
         struct DurVisitor;
 
-        impl<'de> Visitor<'de> for DurVisitor {
+        impl Visitor<'_> for DurVisitor {
             type Value = ReadableDuration;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -691,7 +691,7 @@ impl<'de> Deserialize<'de> for ReadableOffsetTime {
     {
         struct OffTimeVisitor;
 
-        impl<'de> Visitor<'de> for OffTimeVisitor {
+        impl Visitor<'_> for OffTimeVisitor {
             type Value = ReadableOffsetTime;
 
             fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -1497,7 +1497,7 @@ impl TomlWriter {
     fn write_current_table(&mut self, change: &mut HashMap<String, String>) {
         let keys: Vec<_> = change
             .keys()
-            .filter_map(|k| k.split('.').last())
+            .filter_map(|k| k.split('.').next_back())
             .map(str::to_owned)
             .collect();
         for k in keys {
@@ -1814,7 +1814,7 @@ impl RaftDataStateMachine {
         fs::read_dir(path).unwrap().any(|entry| {
             if let Ok(e) = entry {
                 let p = e.path();
-                p.is_file() && p.extension().map_or(false, |ext| ext == "raftlog")
+                p.is_file() && p.extension().is_some_and(|ext| ext == "raftlog")
             } else {
                 false
             }

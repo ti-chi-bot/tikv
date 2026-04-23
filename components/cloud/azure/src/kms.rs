@@ -188,7 +188,7 @@ impl KmsProvider for AzureKms {
             ),
         };
         self.client
-            .encrypt(&self.current_key_id.clone().into_inner(), encrypt_params)
+            .encrypt(self.current_key_id.clone().into_inner(), encrypt_params)
             .await
             .map_err(convert_azure_error)
             .and_then(|response| {

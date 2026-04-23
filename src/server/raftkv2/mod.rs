@@ -278,8 +278,7 @@ impl<EK: KvEngine, ER: RaftEngine> tikv_kv::Engine for RaftKv2<EK, ER> {
     type IMSnap = Self::Snap;
     type IMSnapshotRes = impl Future<Output = tikv_kv::Result<Self::IMSnap>> + Send + 'static;
     fn async_in_memory_snapshot(&mut self, ctx: tikv_kv::SnapContext<'_>) -> Self::IMSnapshotRes {
-        let fut = self.async_snapshot(ctx);
-        async move { fut.await }
+        self.async_snapshot(ctx)
     }
 
     type WriteRes = impl Stream<Item = WriteEvent> + Send + Unpin;

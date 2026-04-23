@@ -457,7 +457,7 @@ impl Interval {
 
         // Populate fields in reverse order
         for (i, &matched) in matches.iter().rev().enumerate() {
-            fields[index as usize - i] = &matched;
+            fields[index as usize - i] = matched;
         }
 
         // Helper to parse integer fields and handle errors

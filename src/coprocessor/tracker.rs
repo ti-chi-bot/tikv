@@ -378,11 +378,7 @@ impl<E: Engine> Tracker<E> {
         let region_id = self.req_ctx.context.get_region_id();
         let start_key = Key::from_raw(&self.req_ctx.lower_bound);
         let end_key = Key::from_raw(&self.req_ctx.upper_bound);
-        let reverse_scan = if let Some(reverse_scan) = self.req_ctx.is_desc_scan {
-            reverse_scan
-        } else {
-            false
-        };
+        let reverse_scan = self.req_ctx.is_desc_scan.unwrap_or(false);
 
         // only collect metrics for select and index, exclude transient read flow such
         // like analyze and checksum.

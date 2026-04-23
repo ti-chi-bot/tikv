@@ -1077,7 +1077,7 @@ mod tests {
         let key = generate_data_key(method).unwrap().1;
         let mut wt = EncrypterWriter::new(YieldOnce::new(buf), method, &key, iv).unwrap();
         let waker = Waker::noop();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(waker);
         assert_matches!(
             Pin::new(&mut wt).poll_write(&mut cx, &plain_text[..size / 2]),
             Poll::Pending

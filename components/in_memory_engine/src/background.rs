@@ -1077,9 +1077,7 @@ impl Runnable for BackgroundRunner {
                         Some(t.unwrap().parse::<u64>().unwrap())
                     });
 
-                    let Some(ref rocks_engine) = self.rocks_engine else {
-                        return None;
-                    };
+                    let rocks_engine = self.rocks_engine.as_ref()?;
                     let latest_seqno = rocks_engine.get_latest_sequence_number();
                     Some(
                         rocks_engine

@@ -329,8 +329,7 @@ impl<RE: RaftExtension + 'static> Engine for RocksEngine<RE> {
     type IMSnap = Self::Snap;
     type IMSnapshotRes = impl Future<Output = Result<Self::IMSnap>> + Send;
     fn async_in_memory_snapshot(&mut self, ctx: SnapContext<'_>) -> Self::IMSnapshotRes {
-        let fut = self.async_snapshot(ctx);
-        async move { fut.await }
+        self.async_snapshot(ctx)
     }
 
     fn seek_region(&self, from: &[u8], callback: SeekRegionCallback) -> Result<()> {

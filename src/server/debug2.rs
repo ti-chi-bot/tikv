@@ -982,7 +982,7 @@ fn range_in_region<'a>(
         DATA_PREFIX_KEY
     };
     if range_start == DATA_PREFIX_KEY && range_end == DATA_PREFIX_KEY {
-        return Some((region.get_start_key(), region.get_end_key()));
+        Some((region.get_start_key(), region.get_end_key()))
     } else if range_start == DATA_PREFIX_KEY {
         assert!(range_end.starts_with(DATA_PREFIX_KEY));
         if region.get_start_key() < &range_end[DATA_PREFIX_KEY.len()..] {
@@ -1699,8 +1699,7 @@ mod tests {
                 region.set_id(region_id);
                 let peers = peers
                     .iter()
-                    .enumerate()
-                    .map(|(_, &sid)| Peer {
+                    .map(|&sid| Peer {
                         id: region_id,
                         store_id: sid,
                         ..Default::default()

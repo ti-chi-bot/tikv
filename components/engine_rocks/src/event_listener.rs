@@ -175,10 +175,7 @@ impl rocksdb::EventListener for RocksEventListener {
 // We assume that only the corruption sst file path is printed inside error.
 fn resolve_sst_filename_from_err(err: &str) -> Option<String> {
     let r = Regex::new(r"/\w*\.sst").unwrap();
-    let matches = match r.captures(err) {
-        None => return None,
-        Some(v) => v,
-    };
+    let matches = r.captures(err)?;
     let filename = matches.get(0).unwrap().as_str().to_owned();
     Some(filename)
 }

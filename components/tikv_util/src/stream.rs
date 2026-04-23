@@ -218,10 +218,7 @@ macro_rules! retry_expr {
 
 /// Retires a future execution. Comparing to `retry`, this version allows more
 /// configurations.
-pub async fn retry_all_ext<'a, G, T, F, E>(
-    mut action: G,
-    ext: RetryExt<JustRetry<E>>,
-) -> Result<T, E>
+pub async fn retry_all_ext<G, T, F, E>(mut action: G, ext: RetryExt<JustRetry<E>>) -> Result<T, E>
 where
     G: FnMut() -> F,
     F: Future<Output = Result<T, E>>,
@@ -287,6 +284,7 @@ mod tests {
 
     #[test]
     fn test_retry_is_send_even_return_type_not_sync() {
+        #[allow(dead_code)]
         struct BangSync(Option<RefCell<()>>);
         let fut = retry(|| futures::future::ok::<_, TriviallyRetry>(BangSync(None)));
         assert_send(fut)

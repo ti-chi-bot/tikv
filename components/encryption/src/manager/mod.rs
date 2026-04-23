@@ -383,7 +383,7 @@ fn check_stale_file_exist(
     file_dict: &mut FileDictionary,
     file_dict_file: &mut FileDictionaryFile,
 ) -> Result<()> {
-    if file_dict.files.get(fname).is_some() {
+    if file_dict.files.contains_key(fname) {
         if Path::new(fname).exists() {
             return Err(Error::Io(IoError::new(
                 ErrorKind::AlreadyExists,

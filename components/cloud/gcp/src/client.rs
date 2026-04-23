@@ -166,6 +166,7 @@ trait ResultExt {
 
     // Maps the error of this result as an `std::io::Error` with `Other` error
     // kind.
+    #[allow(dead_code)]
     fn or_io_error<D: Display>(self, msg: D) -> io::Result<Self::Ok>;
 
     // Maps the error of this result as an `std::io::Error` with `InvalidInput`

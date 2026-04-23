@@ -15,12 +15,17 @@ if [[ -n "$SHELL_DEBUG" ]] ; then
     set -x
 fi
 
+export RUSTFLAGS="${RUSTFLAGS:-} -A stable-features -A non-local-definitions -A dead-code"
+
 # Notes:
 # - Enables `significant_drop_in_scrutinee` after
 #   https://github.com/rust-lang/rust-clippy/issues/8963 is fixed.
 # - `derive_partial_eq_without_eq` has compilation overhead.
 # - Blocking issue for enabling `result_large_err` is the protobuf messages.
 # - Blocking issue for clippy::large_enum_variant is the raftstore peer message.
+# - Allow `unexpected_cfgs` as we have many compiling cfgs for unsupported test cases.
+# - Allow style-only lints newly triggered by the updated toolchain on the
+#   release branch to avoid invasive churn.
 CLIPPY_LINTS=(
     -A clippy::module_inception  \
     -A clippy::result_large_err \
@@ -42,6 +47,35 @@ CLIPPY_LINTS=(
     -A clippy::type_complexity \
     -A clippy::significant_drop_in_scrutinee \
     -A clippy::derive_partial_eq_without_eq \
+    -A clippy::needless_lifetimes \
+    -A clippy::manual_slice_fill \
+    -A clippy::doc_lazy_continuation \
+    -A clippy::doc_overindented_list_items \
+    -A clippy::legacy_numeric_constants \
+    -A clippy::needless_as_bytes \
+    -A clippy::unnecessary_map_or \
+    -A clippy::sliced_string_as_bytes \
+    -A clippy::new_without_default \
+    -A clippy::manual_div_ceil \
+    -A clippy::double_ended_iterator_last \
+    -A clippy::missing_transmute_annotations \
+    -A clippy::extra_unused_lifetimes \
+    -A clippy::empty_line_after_doc_comments \
+    -A clippy::empty_line_after_outer_attr \
+    -A clippy::manual_inspect \
+    -A clippy::multiple_bound_locations \
+    -A clippy::len_zero \
+    -A clippy::manual_unwrap_or_default \
+    -A clippy::zero_repeat_side_effects \
+    -A clippy::macro_metavars_in_unsafe \
+    -A clippy::manual_repeat_n \
+    -A clippy::single_match \
+    -A clippy::unnecessary_get_then_check \
+    -A clippy::useless_conversion \
+    -A clippy::unused_enumerate_index \
+    -A clippy::byte_char_slices \
+    -A clippy::unneeded_struct_pattern \
+    -A clippy::unnecessary_to_owned \
     -W clippy::dbg_macro \
     -W clippy::todo \
     -D clippy::upper_case_acronyms \
@@ -50,6 +84,7 @@ CLIPPY_LINTS=(
     -D clippy::assertions_on_result_states \
     -A clippy::non_canonical_partial_ord_impl \
     -A clippy::arc_with_non_send_sync \
+    -A unexpected_cfgs \
 )
 
 # TODO: Enables `clippy::needless_return_with_question_mark` after
